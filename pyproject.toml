@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "client"
+version = "0.1.0"
+description = ""
+authors = ["twinszs <dongwoo5271@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.scripts]
+client = "client.main:_asyncio"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+opencv-python = "^4.6.0.66"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
