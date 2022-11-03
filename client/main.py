@@ -1,11 +1,18 @@
 from http import server
+from typing import Any
 import cv2
 import logging
 import asyncio
 import pickle
 import struct
+import pydantic
 
 # import uuid
+
+
+class Write(pydantic.BaseModel):
+    car_id : str
+    jpgImg : list
 
 # car_id = uuid.uuid4().hex
 car_id = "e208d83305274b1daa97e4465cb57c8b"
@@ -28,12 +35,11 @@ def _asyncio():
         while True:
             ret, cap = VC.read()
             ret, jpgImg = cv2.imencode(".jpg", cap)
-
-            car_idBin = car_id.encode("utf-8")
-            jpgBin = pickle.dumps(jpgImg)
-
-            bin = car_idBin + jpgBin
-
+            to_write = Write(
+                car_id = car_id,
+                jpgImg = jpgImg.tolist()
+            )
+            bin = pickle.dumps(to_write.json())
             writer.write(struct.pack("<L", len(bin)) + bin)
             await writer.drain()
 
