@@ -8,6 +8,7 @@ import struct
 import pydantic
 from client.movement import handle_movement
 from multiprocessing import Process, Queue
+import RPi.GPIO as GPIO
 # import uuid
 
 
@@ -32,26 +33,30 @@ async def car_recieve(server_ip):
         )
     except:
         logging.warning("connection failed")
-        return        
-    while True:
-        buffer = b""
-        recved_msg = "not received"
-        while len(buffer) < 4:
-            recved = await reader.read(4)
-            if recved==0:
-                return
-            buffer += recved
-            recved_msg = "received"
-        movement = buffer[:4]
-        buffer = buffer[4:]
-        movement = struct.unpack("<L", movement)[0]
-        if movement != 0:
-            print(movement)
-        handle_movement(movement)
-        m = Message(message=recved_msg)
-        bin = pickle.dumps(m.json())
-        writer.write(struct.pack("<L", len(bin)) + bin)
-        await writer.drain()
+        return    
+    try:    
+        while True:
+            buffer = b""
+            recved_msg = "not received"
+            while len(buffer) < 4:
+                recved = await reader.read(4)
+                if recved==0:
+                    return
+                buffer += recved
+                recved_msg = "received"
+            movement = buffer[:4]
+            buffer = buffer[4:]
+            movement = struct.unpack("<L", movement)[0]
+            if movement != 0:
+                print(movement)
+            handle_movement(movement)
+            m = Message(message=recved_msg)
+            bin = pickle.dumps(m.json())
+            writer.write(struct.pack("<L", len(bin)) + bin)
+            await writer.drain()
+    except KeyboardInterrupt:
+        pass
+    GPIO.cleanup()
     writer.close()
 
 
