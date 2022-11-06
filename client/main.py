@@ -83,10 +83,10 @@ def start_server(func_idx, server_ip):
 
 
 def _asyncio():
-    server_public_ip = input("server ip: ")
-    if not server_public_ip:
-        server_public_ip = "127.0.0.1"
-    
+    # server_public_ip = input("server ip: ")
+    # if not server_public_ip:
+    #     server_public_ip = "127.0.0.1"
+    server_public_ip = "ec2-50-17-57-67.compute-1.amazonaws.com"
     t = Process(target=start_server, args=(0,server_public_ip))
     t.start()
     t = Process(target=start_server, args=(1,server_public_ip))
