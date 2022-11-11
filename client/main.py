@@ -5,16 +5,12 @@ import logging
 import asyncio
 import pickle
 import struct
-import pydantic
 from client.movement import handle_movement
 from multiprocessing import Process, Queue
 import RPi.GPIO as GPIO
+
 # import uuid
 
-
-class Write(pydantic.BaseModel):
-    car_id : str
-    jpgImg : list
 
 # car_id = uuid.uuid4().hex
 car_id = "e208d83305274b1daa97e4465cb57c8b"
@@ -22,25 +18,20 @@ car_id = "e208d83305274b1daa97e4465cb57c8b"
 
 server_public_ip = "ec2-50-17-57-67.compute-1.amazonaws.com"
 
-class Message(pydantic.BaseModel):
-    message : str
-
 
 async def car_recieve(server_ip):
     try:
-        reader, writer = await asyncio.open_connection(
-            host=server_ip, port=9998
-        )
+        reader, writer = await asyncio.open_connection(host=server_ip, port=9998)
     except:
         logging.warning("connection failed")
-        return    
-    try:    
+        return
+    try:
         while True:
             buffer = b""
             recved_msg = "not received"
             while len(buffer) < 4:
                 recved = await reader.read(4)
-                if recved==0:
+                if recved == 0:
                     return
                 buffer += recved
                 recved_msg = "received"
@@ -50,8 +41,7 @@ async def car_recieve(server_ip):
             if movement != 0:
                 print(movement)
             handle_movement(movement)
-            m = Message(message=recved_msg)
-            bin = pickle.dumps(m.json())
+            bin = pickle.dumps(recved_msg)
             writer.write(struct.pack("<L", len(bin)) + bin)
             await writer.drain()
     except KeyboardInterrupt:
@@ -61,23 +51,21 @@ async def car_recieve(server_ip):
 
 
 async def sending(server_ip):
-    
-    reader, writer = await asyncio.open_connection(
-        host=server_ip, port=9999
-    )
-    
+
+    reader, writer = await asyncio.open_connection(host=server_ip, port=9999)
+
     VC = cv2.VideoCapture(0)
     while True:
         ret, cap = VC.read()
         ret, jpgImg = cv2.imencode(".jpg", cap)
-        to_write = Write(
-            car_id = car_id,
-            jpgImg = jpgImg.tolist()
-        )
-        bin = pickle.dumps(to_write.json())
+
+        car_idBin = car_id.encode("utf-8")
+        jpgBin = pickle.dumps(jpgImg)
+
+        bin = car_idBin + jpgBin
+
         writer.write(struct.pack("<L", len(bin)) + bin)
         await writer.drain()
-
 
 
 def start_server(func_idx, server_ip):
@@ -88,13 +76,16 @@ def start_server(func_idx, server_ip):
 
 
 def _asyncio():
-    # server_public_ip = input("server ip: ")
-    # if not server_public_ip:
-    #     server_public_ip = "127.0.0.1"
-    server_public_ip = "ec2-50-17-57-67.compute-1.amazonaws.com"
-    t = Process(target=start_server, args=(0,server_public_ip))
+    i = input("[1]127.0.0.1 [2]aws_ec2 [3]ip(public) (1/2/3)? ")
+    if i is 1 or "":
+        server_public_ip = "127.0.0.1"
+    elif i is 2:
+        server_public_ip = "ec2-50-17-57-67.compute-1.amazonaws.com"
+    elif i is 3:
+        server_public_ip = input("input server ip : ")
+    t = Process(target=start_server, args=(0, server_public_ip))
     t.start()
-    t = Process(target=start_server, args=(1,server_public_ip))
+    t = Process(target=start_server, args=(1, server_public_ip))
     t.start()
 
 
