@@ -76,10 +76,9 @@ def start_server(func_idx, server_ip):
 
 
 def _asyncio():
-    i = input("[1]127.0.0.1 [2]aws_ec2 [3]ip(public) (1/2/3)? ")
-    if i == 1 or "":
-        server_public_ip = "127.0.0.1"
-    elif i == 2:
+    i = input("[1] 127.0.0.1\n[2] aws_ec2\n[3] ip\n(1/2/3)? ")
+    server_public_ip = "127.0.0.1"
+    if i == 2:
         server_public_ip = "ec2-50-17-57-67.compute-1.amazonaws.com"
     elif i == 3:
         server_public_ip = input("input server ip : ")
