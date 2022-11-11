@@ -77,11 +77,11 @@ def start_server(func_idx, server_ip):
 
 def _asyncio():
     i = input("[1]127.0.0.1 [2]aws_ec2 [3]ip(public) (1/2/3)? ")
-    if i is 1 or "":
+    if i == 1 or "":
         server_public_ip = "127.0.0.1"
-    elif i is 2:
+    elif i == 2:
         server_public_ip = "ec2-50-17-57-67.compute-1.amazonaws.com"
-    elif i is 3:
+    elif i == 3:
         server_public_ip = input("input server ip : ")
     t = Process(target=start_server, args=(0, server_public_ip))
     t.start()
