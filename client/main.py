@@ -55,9 +55,16 @@ async def sending(server_ip):
     reader, writer = await asyncio.open_connection(host=server_ip, port=9999)
 
     VC = cv2.VideoCapture(0)
+
+    # camera size
+    VC.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+    VC.set(cv2.CAP_PROP_FRAME_HEIGHT, 360)
+
     while True:
         ret, cap = VC.read()
-        ret, jpgImg = cv2.imencode(".jpg", cap)
+        ret, jpgImg = cv2.imencode(
+            ".jpg", cap, [int(cv2.IMWRITE_JPEG_QUALITY), 95]
+        )  # JPEG Quality [0,100], default=95
 
         car_idBin = car_id.encode("utf-8")
         jpgBin = pickle.dumps(jpgImg)
