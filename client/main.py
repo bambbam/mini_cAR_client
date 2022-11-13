@@ -5,6 +5,7 @@ import logging
 import asyncio
 import pickle
 import struct
+import time
 from client.movement import handle_movement
 from multiprocessing import Process, Queue
 import RPi.GPIO as GPIO
@@ -56,23 +57,43 @@ async def sending(server_ip):
 
     VC = cv2.VideoCapture(0)
 
-    # camera size
-    VC.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-    VC.set(cv2.CAP_PROP_FRAME_HEIGHT, 360)
+    print("\nClient Side")
+    print("default = " + str(int(VC.get(cv2.CAP_PROP_FRAME_WIDTH))), end="x")
+    print(str(int(VC.get(cv2.CAP_PROP_FRAME_HEIGHT))), end=" ")
+    max_framerate = VC.get(cv2.CAP_PROP_FPS)
+    print(str(int(max_framerate)) + "fps")
+
+    width = 320
+    height = 180
+    framerate = 2
+
+    VC.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+    VC.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+    fr_prev_time = 0
+
+    print("current = " + str(int(VC.get(cv2.CAP_PROP_FRAME_WIDTH))), end="x")
+    print(str(int(VC.get(cv2.CAP_PROP_FRAME_HEIGHT))), end=" ")
+    print(
+        str((lambda fr: max_framerate if fr > max_framerate else fr)(framerate)) + "fps"
+    )
 
     while True:
         ret, cap = VC.read()
-        ret, jpgImg = cv2.imencode(
-            ".jpg", cap, [int(cv2.IMWRITE_JPEG_QUALITY), 95]
-        )  # JPEG Quality [0,100], default=95
+        fr_time_elapsed = time.time() - fr_prev_time
+        if fr_time_elapsed > 1.0 / framerate:
+            fr_prev_time = time.time()
 
-        car_idBin = car_id.encode("utf-8")
-        jpgBin = pickle.dumps(jpgImg)
+            # JPEG Quality [0,100], default=95
+            # 이미지에 따라 다르지만 대부분 70-80 이상부터 이미지 크기 급격히 증가
+            ret, jpgImg = cv2.imencode(".jpg", cap, [int(cv2.IMWRITE_JPEG_QUALITY), 50])
 
-        bin = car_idBin + jpgBin
+            car_idBin = car_id.encode("utf-8")
+            jpgBin = pickle.dumps(jpgImg)
 
-        writer.write(struct.pack("<L", len(bin)) + bin)
-        await writer.drain()
+            bin = car_idBin + jpgBin
+
+            writer.write(struct.pack("<L", len(bin)) + bin)
+            await writer.drain()
 
 
 def start_server(func_idx, server_ip):
