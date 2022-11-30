@@ -3,17 +3,16 @@ from typing import Any
 import cv2
 import logging
 import asyncio
+import asyncio_dgram
 import pickle
 import struct
-import pydantic
+import time
 from client.movement import handle_movement
 from multiprocessing import Process, Queue
+import RPi.GPIO as GPIO
+
 # import uuid
 
-
-class Write(pydantic.BaseModel):
-    car_id : str
-    jpgImg : list
 
 # car_id = uuid.uuid4().hex
 car_id = "e208d83305274b1daa97e4465cb57c8b"
@@ -21,84 +20,151 @@ car_id = "e208d83305274b1daa97e4465cb57c8b"
 
 server_public_ip = "ec2-50-17-57-67.compute-1.amazonaws.com"
 
-class Message(pydantic.BaseModel):
-    message : str
-
 
 async def car_recieve(server_ip):
     try:
-        reader, writer = await asyncio.open_connection(
-            host=server_ip, port=9998
-        )
+        reader, writer = await asyncio.open_connection(host=server_ip, port=9998)
     except:
         logging.warning("connection failed")
-        return        
-    while True:
-        buffer = b""
-        recved_msg = "not received"
-        while len(buffer) < 4:
-            recved = await reader.read(4)
-            if recved==0:
-                return
-            buffer += recved
-            recved_msg = "received"
-        movement = buffer[:4]
-        buffer = buffer[4:]
-        movement = struct.unpack("<L", movement)[0]
-        if movement != 0:
-            print(movement)
-        handle_movement(movement)
-        m = Message(message=recved_msg)
-        bin = pickle.dumps(m.json())
-        writer.write(struct.pack("<L", len(bin)) + bin)
-        await writer.drain()
+        return
+    try:
+        while True:
+            buffer = b""
+            recved_msg = "not received"
+            while len(buffer) < 4:
+                recved = await reader.read(4)
+                if recved == 0:
+                    return
+                buffer += recved
+                recved_msg = "received"
+            movement = buffer[:4]
+            buffer = buffer[4:]
+            movement = struct.unpack("<L", movement)[0]
+            if movement != 0:
+                print(movement)
+            handle_movement(movement)
+            bin = pickle.dumps(recved_msg)
+            writer.write(struct.pack("<L", len(bin)) + bin)
+            await writer.drain()
+    except KeyboardInterrupt:
+        pass
+    GPIO.cleanup()
     writer.close()
 
 
 async def sending(server_ip):
-    
-    reader, writer = await asyncio.open_connection(
-        host=server_ip, port=9999
-    )
-    
+
+    reader, writer = await asyncio.open_connection(host=server_ip, port=9999)
+
     VC = cv2.VideoCapture(0)
-    VC.set(4,240)
-    VC.set(3,320)
-    frame_per_sec = 6
-    current_frame = -1
+
+    print("\nClient Side")
+    print("default = " + str(int(VC.get(cv2.CAP_PROP_FRAME_WIDTH))), end="x")
+    print(str(int(VC.get(cv2.CAP_PROP_FRAME_HEIGHT))), end=" ")
+    max_framerate = VC.get(cv2.CAP_PROP_FPS)
+    print(str(int(max_framerate)) + "fps")
+
+    width = 320
+    height = 180
+    framerate = 30
+
+    VC.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+    VC.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+    fr_prev_time = 0
+
+    print("current = " + str(int(VC.get(cv2.CAP_PROP_FRAME_WIDTH))), end="x")
+    print(str(int(VC.get(cv2.CAP_PROP_FRAME_HEIGHT))), end=" ")
+    print(
+        str((lambda fr: max_framerate if fr > max_framerate else fr)(framerate)) + "fps"
+    )
+
     while True:
         ret, cap = VC.read()
-        cap = cv2.flip(cap,0)
-        current_frame += 1
-        current_frame %= frame_per_sec
-        # if current_frame != 0:
-        #     continue
-        ret, jpgImg = cv2.imencode(".jpg", cap)
-        to_write = Write(
-            car_id = car_id,
-            jpgImg = jpgImg.tolist()
-        )
-        bin = pickle.dumps(to_write.json())
-        writer.write(struct.pack("<L", len(bin)) + bin)
-        await writer.drain()
+        fr_time_elapsed = time.time() - fr_prev_time
+        if fr_time_elapsed > 1.0 / framerate:
+            fr_prev_time = time.time()
 
+            # JPEG Quality [0,100], default=95
+            # 이미지에 따라 다르지만 대부분 70-80 이상부터 이미지 크기 급격히 증가
+            ret, jpgImg = cv2.imencode(".jpg", cap, [int(cv2.IMWRITE_JPEG_QUALITY), 50])
+
+            car_idBin = car_id.encode("utf-8")
+            jpgBin = pickle.dumps(jpgImg)
+
+            bin = car_idBin + jpgBin
+
+            writer.write(struct.pack("<L", len(bin)) + bin)
+            await writer.drain()
+
+
+async def udpsending(server_ip):
+
+    stream = await asyncio_dgram.connect((server_ip, 9997))
+
+    VC = cv2.VideoCapture(0)
+
+    print("\nClient Side")
+    print("default = " + str(int(VC.get(cv2.CAP_PROP_FRAME_WIDTH))), end="x")
+    print(str(int(VC.get(cv2.CAP_PROP_FRAME_HEIGHT))), end=" ")
+    max_framerate = VC.get(cv2.CAP_PROP_FPS)
+    print(str(int(max_framerate)) + "fps")
+
+    width = 320
+    height = 180
+    framerate = 30
+
+    VC.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+    VC.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+    fr_prev_time = 0
+
+    print("current = " + str(int(VC.get(cv2.CAP_PROP_FRAME_WIDTH))), end="x")
+    print(str(int(VC.get(cv2.CAP_PROP_FRAME_HEIGHT))), end=" ")
+    print(
+        str((lambda fr: max_framerate if fr > max_framerate else fr)(framerate)) + "fps"
+    )
+
+    def fragment(arr, n):
+        for i in range(0, len(datagram), n):
+            yield arr[i : i + n]
+
+    while True:
+        ret, cap = VC.read()
+        fr_time_elapsed = time.time() - fr_prev_time
+        if fr_time_elapsed > 1.0 / framerate:
+            fr_prev_time = time.time()
+            ret, jpgImg = cv2.imencode(".jpg", cap, [int(cv2.IMWRITE_JPEG_QUALITY), 50])
+
+            car_idBin = car_id.encode("utf-8")
+            jpgBin = pickle.dumps(jpgImg)
+
+            bin = car_idBin + jpgBin
+
+            datagram = struct.pack("<L", len(bin)) + bin
+
+            fragments = fragment(datagram, 1500)
+            for fm in fragments:
+                await stream.send(fm)
 
 
 def start_server(func_idx, server_ip):
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    funcs = [sending, car_recieve]
+    funcs = [sending, udpsending, car_recieve]
     asyncio.run(funcs[func_idx](server_ip))
 
 
 def _asyncio():
-    # server_public_ip = input("server ip: ")
-    # if not server_public_ip:
-    #     server_public_ip = "127.0.0.1"
-    server_public_ip = "192.168.83.36"
-    t = Process(target=start_server, args=(0,server_public_ip))
+    i = input("[1] 127.0.0.1\n[2] aws_ec2\n[3] ip\n(1/2/3)? ")
+    server_public_ip = "127.0.0.1"
+    if i == 2:
+        server_public_ip = "ec2-50-17-57-67.compute-1.amazonaws.com"
+    elif i == 3:
+        server_public_ip = input("input server ip : ")
+    t = Process(target=start_server, args=(0, server_public_ip))
     t.start()
-    t = Process(target=start_server, args=(1,server_public_ip))
+    t = Process(target=start_server, args=(1, server_public_ip))
+    t.start()
+    t = Process(target=start_server, args=(2, server_public_ip))
     t.start()
 
 

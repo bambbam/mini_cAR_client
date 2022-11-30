@@ -59,7 +59,6 @@ class BaseSetting(Singleton):
         self.R_Motor = GPIO.PWM(self.PWMB, 500)
         self.R_Motor.start(0)
         self.p = GPIO.PWM(self.BUZZER, 391)
-
     def move(self,x : Movement):
         if x==Movement.nothing:
             return
