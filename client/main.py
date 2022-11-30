@@ -1,20 +1,21 @@
 from http import server
 from typing import Any
 import cv2
+import numpy as np
 import logging
 import asyncio
-import asyncio_dgram
+#import asyncio_dgram
 import pickle
 import struct
 import time
-# from client.movement import handle_movement
+#from client.movement import handle_movement
 from multiprocessing import Process, Queue
 from dotenv import load_dotenv
 import os
 load_dotenv()
 if os.environ.get('mode')=='prod':
     import RPi.GPIO as GPIO
-    from movement import handle_movement
+    from client.movement import handle_movement
 
 # import uuid
 
@@ -92,14 +93,15 @@ async def sending(server_ip):
         fr_time_elapsed = time.time() - fr_prev_time
         if fr_time_elapsed > 1.0 / framerate:
             fr_prev_time = time.time()
-
+            
             # JPEG Quality [0,100], default=95
             # 이미지에 따라 다르지만 대부분 70-80 이상부터 이미지 크기 급격히 증가
+            if os.environ.get('mode')=='prod':
+                cap = cap[::-1]
             ret, jpgImg = cv2.imencode(".jpg", cap, [int(cv2.IMWRITE_JPEG_QUALITY), 50])
-
             car_idBin = car_id.encode("utf-8")
             jpgBin = pickle.dumps(jpgImg)
-
+        
             bin = car_idBin + jpgBin
 
             writer.write(struct.pack("<L", len(bin)) + bin)
@@ -169,8 +171,8 @@ def _asyncio():
 
     t = Process(target=start_server, args=(0, server_public_ip))
     t.start()
-    t = Process(target=start_server, args=(1, server_public_ip))
-    t.start()
+    #t = Process(target=start_server, args=(1, server_public_ip))
+    #t.start()
     t = Process(target=start_server, args=(2, server_public_ip))
     t.start()
 
