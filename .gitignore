@@ -24,3 +24,6 @@ poetry.lock
 # vim temporary files
 *~
 .*.sw?
+
+
+.env
