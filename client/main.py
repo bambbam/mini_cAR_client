@@ -3,6 +3,7 @@ from typing import Any
 import cv2
 import logging
 import asyncio
+import asyncio_dgram
 import pickle
 import struct
 import time
@@ -70,9 +71,11 @@ async def sending(server_ip):
     max_framerate = VC.get(cv2.CAP_PROP_FPS)
     print(str(int(max_framerate)) + "fps")
 
+
     width = int(os.environ.get('width'))
     height = int(os.environ.get('height'))
     framerate = int(os.environ.get('framerate'))
+
 
     VC.set(cv2.CAP_PROP_FRAME_WIDTH, width)
     VC.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
@@ -103,11 +106,59 @@ async def sending(server_ip):
             await writer.drain()
 
 
+async def udpsending(server_ip):
+
+    stream = await asyncio_dgram.connect((server_ip, 9997))
+
+    VC = cv2.VideoCapture(0)
+
+    print("\nClient Side")
+    print("default = " + str(int(VC.get(cv2.CAP_PROP_FRAME_WIDTH))), end="x")
+    print(str(int(VC.get(cv2.CAP_PROP_FRAME_HEIGHT))), end=" ")
+    max_framerate = VC.get(cv2.CAP_PROP_FPS)
+    print(str(int(max_framerate)) + "fps")
+
+    width = 320
+    height = 180
+    framerate = 30
+
+    VC.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+    VC.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+    fr_prev_time = 0
+
+    print("current = " + str(int(VC.get(cv2.CAP_PROP_FRAME_WIDTH))), end="x")
+    print(str(int(VC.get(cv2.CAP_PROP_FRAME_HEIGHT))), end=" ")
+    print(
+        str((lambda fr: max_framerate if fr > max_framerate else fr)(framerate)) + "fps"
+    )
+
+    def fragment(arr, n):
+        for i in range(0, len(datagram), n):
+            yield arr[i : i + n]
+
+    while True:
+        ret, cap = VC.read()
+        fr_time_elapsed = time.time() - fr_prev_time
+        if fr_time_elapsed > 1.0 / framerate:
+            fr_prev_time = time.time()
+            ret, jpgImg = cv2.imencode(".jpg", cap, [int(cv2.IMWRITE_JPEG_QUALITY), 50])
+
+            car_idBin = car_id.encode("utf-8")
+            jpgBin = pickle.dumps(jpgImg)
+
+            bin = car_idBin + jpgBin
+
+            datagram = struct.pack("<L", len(bin)) + bin
+
+            fragments = fragment(datagram, 1500)
+            for fm in fragments:
+                await stream.send(fm)
+
 
 def start_server(func_idx, server_ip):
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    funcs = [sending, car_recieve]
+    funcs = [sending, udpsending, car_recieve]
     asyncio.run(funcs[func_idx](server_ip))
 
 
@@ -119,6 +170,8 @@ def _asyncio():
     t = Process(target=start_server, args=(0, server_public_ip))
     t.start()
     t = Process(target=start_server, args=(1, server_public_ip))
+    t.start()
+    t = Process(target=start_server, args=(2, server_public_ip))
     t.start()
 
 
