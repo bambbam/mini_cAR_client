@@ -1,6 +1,8 @@
 from enum import Enum
 import RPi.GPIO as GPIO
 import time
+from copy import deepcopy
+import multiprocessing
 
 class Singleton(object):
     _instance = None
@@ -10,15 +12,23 @@ class Singleton(object):
             class_._instance = super(Singleton, class_).__new__(class_)
         return class_._instance
 
-
 class Movement(Enum):
     nothing = 0
     forward = 1
     right = 2
     left = 3
     backward = 4
+    stop = 5
+    beep = 6
+    speedup = 7
+    speeddown = 8
+
 class BaseSetting(Singleton):
+    t = 0
     def __init__(self):
+        if BaseSetting.t == 1:
+            return
+        BaseSetting.t+=1
         self.SW = (5, 6, 13, 19)
         self.DIR = (("go", "w"), ("right", "d"), ("left", "a"), ("back", "s"))
         self.CTRL = ((0, 1, 0, 1), (0, 1, 1, 0), (1, 0, 0, 1), (1, 0, 1, 0))
@@ -28,7 +38,9 @@ class BaseSetting(Singleton):
         self.PWMB = 23
         self.BIN1 = 25
         self.BIN2 = 24
-
+        self.BUZZER = 12
+        self.SPEED = 50
+        self.prevMove = Movement.nothing
 
         GPIO.setwarnings(False)
         GPIO.setmode(GPIO.BCM)
@@ -40,29 +52,59 @@ class BaseSetting(Singleton):
         GPIO.setup(self.PWMB, GPIO.OUT)
         GPIO.setup(self.BIN1, GPIO.OUT)
         GPIO.setup(self.BIN2, GPIO.OUT)
+        GPIO.setup(self.BUZZER, GPIO.OUT)
 
-        L_Motor = GPIO.PWM(self.PWMA, 500)
-        L_Motor.start(0)
-        R_Motor = GPIO.PWM(self.PWMB, 500)
-        R_Motor.start(0)
+        self.L_Motor = GPIO.PWM(self.PWMA, 500)
+        self.L_Motor.start(0)
+        self.R_Motor = GPIO.PWM(self.PWMB, 500)
+        self.R_Motor.start(0)
+        self.p = GPIO.PWM(self.BUZZER, 391)
 
     def move(self,x : Movement):
         if x==Movement.nothing:
             return
-        i = x.value-1
+        i = x.value - 1
         GPIO.output(self.AIN1, self.CTRL[i][0])
         GPIO.output(self.AIN2, self.CTRL[i][1])
-        self.L_Motor.ChangeDutyCycle(50)
+        self.L_Motor.ChangeDutyCycle(self.SPEED)
         GPIO.output(self.BIN1, self.CTRL[i][2])
         GPIO.output(self.BIN2, self.CTRL[i][3])
-        self.R_Motor.ChangeDutyCycle(50)
+        self.R_Motor.ChangeDutyCycle(self.SPEED)
 
-    time.sleep(0.1)
+
+    def stop(self):
+        GPIO.output(self.AIN1, 0)
+        GPIO.output(self.AIN2, 1)
+        self.L_Motor.ChangeDutyCycle(0)
+        GPIO.output(self.BIN1, 0)
+        GPIO.output(self.BIN2, 1)
+        self.R_Motor.ChangeDutyCycle(0)
+    
+    def beep(self):
+        for i in range(2):
+            self.p.start(50)
+            self.p.ChangeFrequency(391)
+            time.sleep(0.2)
+
+            self.p.stop()
+            time.sleep(0.1)
 
 def handle_movement(x : int):
     x = Movement(x)
-    BaseSetting().move(x)
-
-
-
     
+    if x == Movement.stop:
+        BaseSetting().stop()
+    elif x == Movement.beep:
+        BaseSetting().beep()
+    elif x == Movement.speedup:
+        if BaseSetting().SPEED + 10 <= 100:
+            BaseSetting().SPEED += 10
+            BaseSetting().move(BaseSetting().prevMove)
+    elif x == Movement.speeddown:
+        if BaseSetting().SPEED - 10 >= 10:
+            BaseSetting().SPEED -= 10
+            BaseSetting().move(BaseSetting().prevMove)
+    else:
+        BaseSetting().move(x)
+        if x != Movement.nothing:
+            BaseSetting().prevMove = x

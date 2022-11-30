@@ -62,8 +62,17 @@ async def sending(server_ip):
     )
     
     VC = cv2.VideoCapture(0)
+    VC.set(4,240)
+    VC.set(3,320)
+    frame_per_sec = 6
+    current_frame = -1
     while True:
         ret, cap = VC.read()
+        cap = cv2.flip(cap,0)
+        current_frame += 1
+        current_frame %= frame_per_sec
+        # if current_frame != 0:
+        #     continue
         ret, jpgImg = cv2.imencode(".jpg", cap)
         to_write = Write(
             car_id = car_id,
@@ -86,7 +95,7 @@ def _asyncio():
     # server_public_ip = input("server ip: ")
     # if not server_public_ip:
     #     server_public_ip = "127.0.0.1"
-    server_public_ip = "ec2-50-17-57-67.compute-1.amazonaws.com"
+    server_public_ip = "192.168.83.36"
     t = Process(target=start_server, args=(0,server_public_ip))
     t.start()
     t = Process(target=start_server, args=(1,server_public_ip))
