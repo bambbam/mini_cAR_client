@@ -11,6 +11,7 @@ client = "client.main:_asyncio"
 [tool.poetry.dependencies]
 python = "^3.9"
 opencv-python = "^4.6.0.66"
+python-dotenv = "^0.21.0"
 
 
 [build-system]

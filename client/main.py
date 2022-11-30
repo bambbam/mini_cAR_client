@@ -7,9 +7,14 @@ import asyncio_dgram
 import pickle
 import struct
 import time
-from client.movement import handle_movement
+# from client.movement import handle_movement
 from multiprocessing import Process, Queue
-import RPi.GPIO as GPIO
+from dotenv import load_dotenv
+import os
+load_dotenv()
+if os.environ.get('mode')=='prod':
+    import RPi.GPIO as GPIO
+    from movement import handle_movement
 
 # import uuid
 
@@ -23,7 +28,7 @@ server_public_ip = "ec2-50-17-57-67.compute-1.amazonaws.com"
 
 async def car_recieve(server_ip):
     try:
-        reader, writer = await asyncio.open_connection(host=server_ip, port=9998)
+        reader, writer = await asyncio.open_connection(host=server_ip, port=os.environ.get('car_receive_port'))
     except:
         logging.warning("connection failed")
         return
@@ -42,19 +47,21 @@ async def car_recieve(server_ip):
             movement = struct.unpack("<L", movement)[0]
             if movement != 0:
                 print(movement)
-            handle_movement(movement)
+            if os.environ.get('mode')=='prod':
+                handle_movement(movement)
             bin = pickle.dumps(recved_msg)
             writer.write(struct.pack("<L", len(bin)) + bin)
             await writer.drain()
     except KeyboardInterrupt:
         pass
-    GPIO.cleanup()
+    if os.environ.get('mode')=='prod':
+        GPIO.cleanup()
     writer.close()
 
 
 async def sending(server_ip):
 
-    reader, writer = await asyncio.open_connection(host=server_ip, port=9999)
+    reader, writer = await asyncio.open_connection(host=server_ip, port=os.environ.get('frame_send_port'))
 
     VC = cv2.VideoCapture(0)
 
@@ -64,9 +71,11 @@ async def sending(server_ip):
     max_framerate = VC.get(cv2.CAP_PROP_FPS)
     print(str(int(max_framerate)) + "fps")
 
-    width = 320
-    height = 180
-    framerate = 30
+
+    width = int(os.environ.get('width'))
+    height = int(os.environ.get('height'))
+    framerate = int(os.environ.get('framerate'))
+
 
     VC.set(cv2.CAP_PROP_FRAME_WIDTH, width)
     VC.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
@@ -154,12 +163,10 @@ def start_server(func_idx, server_ip):
 
 
 def _asyncio():
-    i = input("[1] 127.0.0.1\n[2] aws_ec2\n[3] ip\n(1/2/3)? ")
-    server_public_ip = "127.0.0.1"
-    if i == 2:
-        server_public_ip = "ec2-50-17-57-67.compute-1.amazonaws.com"
-    elif i == 3:
-        server_public_ip = input("input server ip : ")
+    server_public_ip = os.environ.get("server_ip")
+    if not server_public_ip:
+        server_public_ip = '127.0.0.1'
+
     t = Process(target=start_server, args=(0, server_public_ip))
     t.start()
     t = Process(target=start_server, args=(1, server_public_ip))
