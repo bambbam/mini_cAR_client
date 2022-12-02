@@ -8,6 +8,8 @@ import asyncio_dgram
 import pickle
 import struct
 import time
+import sys
+import math
 
 # from client.movement import handle_movement
 from multiprocessing import Process, Queue
@@ -26,7 +28,7 @@ if os.environ.get("mode") == "prod":
 car_id = "e208d83305274b1daa97e4465cb57c8b"
 
 
-server_public_ip = "ec2-50-17-57-67.compute-1.amazonaws.com"
+#server_public_ip = "ec2-50-17-57-67.compute-1.amazonaws.com"
 
 
 async def car_recieve(server_ip):
@@ -114,7 +116,34 @@ async def sending(server_ip):
 
 async def udpsending(server_ip):
 
-    stream = await asyncio_dgram.connect((server_ip, 9999))
+    # car_id 먼저 보내고, 그 다음 jpgImg를 쪼개서 보낸다
+    async def udp_send_car_id_and_jpg(car_id, jpgImg):
+        MAX_DGRAM = 2**16
+        MAX_IMAGE_DGRAM = MAX_DGRAM - 64
+
+        car_idBin = car_id.encode("utf-8")
+        jpgBin = pickle.dumps(jpgImg)
+
+        jpgBin_size = len(jpgBin)
+        num_of_fragments = math.ceil(jpgBin_size / (MAX_IMAGE_DGRAM))
+        start_pos = 0
+
+        await stream.send(car_idBin) # car_id 전송
+
+        while num_of_fragments:
+            end_pos = min(jpgBin_size, start_pos + MAX_IMAGE_DGRAM)
+            fragment = struct.pack("B", num_of_fragments) + jpgBin[start_pos:end_pos]
+            # fragment 번호 + jpgImg fragment 전송
+            # 맨 마지막 fragment 번호는 1
+            await stream.send(fragment)
+            start_pos = end_pos
+            num_of_fragments -= 1
+
+
+
+    stream = await asyncio_dgram.connect(
+        (server_ip, os.environ.get("frame_send_port"))
+    )
 
     VC = cv2.VideoCapture(0)
 
@@ -124,9 +153,10 @@ async def udpsending(server_ip):
     max_framerate = VC.get(cv2.CAP_PROP_FPS)
     print(str(int(max_framerate)) + "fps")
 
-    width = 320
-    height = 180
-    framerate = 30
+    width = int(os.environ.get("width"))
+    height = int(os.environ.get("height"))
+    framerate = int(os.environ.get("framerate"))
+    jpeg_quality = int(os.environ.get("jpeg_quality"))
 
     VC.set(cv2.CAP_PROP_FRAME_WIDTH, width)
     VC.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
@@ -138,27 +168,18 @@ async def udpsending(server_ip):
         str((lambda fr: max_framerate if fr > max_framerate else fr)(framerate)) + "fps"
     )
 
-    def fragment(arr, n):
-        for i in range(0, len(datagram), n):
-            yield arr[i : i + n]
-
     while True:
         ret, cap = VC.read()
         fr_time_elapsed = time.time() - fr_prev_time
         if fr_time_elapsed > 1.0 / framerate:
             fr_prev_time = time.time()
-            ret, jpgImg = cv2.imencode(".jpg", cap, [int(cv2.IMWRITE_JPEG_QUALITY), 50])
 
-            car_idBin = car_id.encode("utf-8")
-            jpgBin = pickle.dumps(jpgImg)
+            if os.environ.get("mode") == "prod":
+                cap = cap[::-1]
+            ret, jpgImg = cv2.imencode(".jpg", cap, [int(cv2.IMWRITE_JPEG_QUALITY), jpeg_quality])
 
-            bin = car_idBin + jpgBin
+            await udp_send_car_id_and_jpg(car_id, jpgImg)
 
-            datagram = struct.pack("<L", len(bin)) + bin
-
-            fragments = fragment(datagram, 1500)
-            for fm in fragments:
-                await stream.send(fm)
 
 
 def start_server(func_idx, server_ip):
