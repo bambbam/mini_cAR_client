@@ -12,6 +12,7 @@ car_receive_port=9998
 width='frame_width', 320
 height='frame_height', 180
 framerate='frame_rate', 30
+jpeg_quality='jpeg_quality', 30
 
 car_id='e208d83305274b1daa97e4465cb57c8b'
 ```
