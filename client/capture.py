@@ -17,12 +17,23 @@ class Capture:
     
     def upload(self, data):
         try:
-            key = generate_now()
+            key = generate_now() + ".png"
             self.s3.put_object(Bucket= self.bucket, Key=self.car_id+'/'+key, Body=data)
             return key
         except Exception as e:
             print(e)
-            
+    
+    def upload_and_send_request(self, data):
+        server_url = "http://" + os.environ.get("server_ip") + ':' + str(os.environ.get("server_port"))
+        key = self.upload(data)
+        obj = {
+            "car_id" :os.environ.get("car_id"),
+            "type" : "img",
+            "key" : key
+        }
+        requests.post(server_url + "/gallery", json= obj)
+        
+    
     def upload_video(self, video, prefix, key):
         raise NotImplementedError()
     
@@ -35,20 +46,12 @@ if __name__ == "__main__":
     load_dotenv()
     vc = cv2.VideoCapture(0)
     ret, cap = vc.read()
-    
-    server_url = os.environ.get("server_url") + ':' + str(os.environ.get("server_port"))
-    
-    
+    for i in range(10):
+        ret, cap = vc.read()
     s3 = client('s3',
                 aws_access_key_id = os.environ.get("aws_access_key_id"),
                 aws_secret_access_key=os.environ.get("aws_secret_access_key"),
     )
     videoCapture = Capture(s3, os.environ.get("aws_bucket_name"), os.environ.get("car_id"))
-    key = videoCapture.upload(bytes(cap))
-    obj = {
-        "car_id" :os.environ.get("car_id"),
-        "type" : "img",
-        "key" : key
-    }
-    requests.post(server_url + "/gallery", obj)
+    key = videoCapture.upload_and_send_request(cv2.imencode('.png', cap)[1].tobytes())
     
