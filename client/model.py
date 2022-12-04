@@ -33,7 +33,7 @@ class Conv3DModel(tf.keras.Model):
     self.pool2 = tf.keras.layers.MaxPool3D(pool_size=(2, 2,2), data_format='channels_last')
 
     # LSTM & Flatten
-    self.convLSTM =tf.keras.layers.ConvLSTM2D(40, (3, 3))
+    self.convLSTM = tf.keras.layers.ConvLSTM2D(40, (3, 3))
     self.flatten =  tf.keras.layers.Flatten(name="flatten")
 
     # Dense layers

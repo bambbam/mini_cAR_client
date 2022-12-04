@@ -65,7 +65,7 @@ async def inference(server_ip):
     new_model = Conv3DModel()
     new_model.compile(loss='sparse_categorical_crossentropy',
                   optimizer=tf.keras.optimizers.legacy.RMSprop())
-    new_model.load_weights('client/weight/cp-0010.ckpt')
+    new_model.load_weights('client/weight/cp-0004.ckpt')
     
     s3 = client('s3',
                 aws_access_key_id = os.environ.get("aws_access_key_id"),
