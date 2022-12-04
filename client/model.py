@@ -73,6 +73,7 @@ class Prediction:
             #print(frame_to_predict)
             frame_to_predict = frame_to_predict.reshape(-1,15,64,64,1)
             predict = self.model.predict(frame_to_predict)
+            print(predict*100)
             classe = classes[np.argmax(predict)]
             self.cur_class = classe
             self.to_predict = []
