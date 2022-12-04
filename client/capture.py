@@ -2,7 +2,9 @@ from boto3 import client, resource
 from uuid import uuid4
 from datetime import datetime
 import requests
-
+import os
+from dotenv import load_dotenv
+load_dotenv()
 
 def generate_now():
     now = datetime.now()
@@ -31,6 +33,7 @@ class Capture:
             "type" : "img",
             "key" : key
         }
+        print(server_url, obj)
         requests.post(server_url + "/gallery", json= obj)
         
     
@@ -41,9 +44,6 @@ class Capture:
 if __name__ == "__main__":
     # test code for capture
     import cv2
-    from dotenv import load_dotenv
-    import os
-    load_dotenv()
     vc = cv2.VideoCapture(0)
     ret, cap = vc.read()
     for i in range(10):

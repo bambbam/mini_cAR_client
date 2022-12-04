@@ -12,6 +12,11 @@ import time
 from multiprocessing import Process, Queue
 from dotenv import load_dotenv
 import os
+from client.model import Conv3DModel, Prediction
+import tensorflow as tf
+from client.capture import Capture
+from boto3 import client, resource
+
 load_dotenv()
 if os.environ.get('mode')=='prod':
     import RPi.GPIO as GPIO
@@ -61,9 +66,20 @@ async def car_recieve(server_ip):
 
 
 async def sending(server_ip):
-
+    new_model = Conv3DModel()
+    new_model.compile(loss='sparse_categorical_crossentropy',
+                  optimizer=tf.keras.optimizers.legacy.RMSprop())
+    new_model.load_weights('client/weight/cp-0010.ckpt')
+    
+    s3 = client('s3',
+                aws_access_key_id = os.environ.get("aws_access_key_id"),
+                aws_secret_access_key=os.environ.get("aws_secret_access_key"),
+    )
+    caputure = Capture(s3, os.environ.get("aws_bucket_name"), os.environ.get("car_id"))
+    
+    
+    
     reader, writer = await asyncio.open_connection(host=server_ip, port=os.environ.get('frame_send_port'))
-
     VC = cv2.VideoCapture(0)
 
     print("\nClient Side")
@@ -88,8 +104,12 @@ async def sending(server_ip):
         str((lambda fr: max_framerate if fr > max_framerate else fr)(framerate)) + "fps"
     )
 
+    pred = Prediction(new_model)
+    preded=''
     while True:
         ret, cap = VC.read()
+        
+        
         fr_time_elapsed = time.time() - fr_prev_time
         if fr_time_elapsed > 1.0 / framerate:
             fr_prev_time = time.time()
@@ -106,6 +126,15 @@ async def sending(server_ip):
 
             writer.write(struct.pack("<L", len(bin)) + bin)
             await writer.drain()
+            
+            cur_preded = pred.predict(cap)
+            if cur_preded!=preded:
+                preded = cur_preded
+                print(preded)
+                if preded == 'Stop Sign':
+                    caputure.upload_and_send_request(cv2.imencode('.png', cap)[1].tobytes())
+                
+            
 
 
 async def udpsending(server_ip):
