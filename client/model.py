@@ -63,22 +63,21 @@ class Prediction:
         self.num_frames = []
         self.cur_class = ''
     
-    def predict(self, caps):
-        assert len(caps) == 30
-        
-        to_predict = []
-        for cap in caps[0::2]:
+    def predict(self, cap):
+        if len(self.to_predict) < 30:
             gray = cv2.cvtColor(cap, cv2.COLOR_BGRA2GRAY)
-            to_predict.append(cv2.resize(gray, (64,64)))
-    
-        frame_to_predict = np.array(to_predict, dtype=np.float32)
-        frame_to_predict = frame_to_predict.reshape(-1, 15, 64, 64, 1)
-        predict = self.model.predict(frame_to_predict)
-        print(predict)
-        classe = classes[np.argmax(predict)]
-        self.cur_class = classe
+            self.to_predict.append(cv2.resize(gray, (64,64)))
         
+        if len(self.to_predict) == 30:
+            frame_to_predict = np.array(self.to_predict[::2], dtype=np.float32)
+            #print(frame_to_predict)
+            predict = self.model.predict(frame_to_predict)
+            classe = classes[np.argmax(predict)]
+            self.cur_class = classe
+            self.to_predict = []
+            
         return self.cur_class
+
 
 
 

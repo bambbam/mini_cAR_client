@@ -123,6 +123,18 @@ async def car_recieve(server_ip):
 
 async def udpsending(server_ip):
     # car_id 먼저 보내고, 그 다음 jpgImg를 쪼개서 보낸다
+    
+    new_model = Conv3DModel()
+    new_model.compile(loss='sparse_categorical_crossentropy',
+                  optimizer=tf.keras.optimizers.legacy.RMSprop())
+    new_model.load_weights('client/weight/cp-0010.ckpt')
+    
+    s3 = client('s3',
+                aws_access_key_id = os.environ.get("aws_access_key_id"),
+                aws_secret_access_key=os.environ.get("aws_secret_access_key"),
+    )
+    caputure = Capture(s3, os.environ.get("aws_bucket_name"), os.environ.get("car_id"))
+    
     async def udp_send_car_id_and_jpg(car_id, jpgImg):
 
         car_idBin = car_id.encode("utf-8")
@@ -166,6 +178,9 @@ async def udpsending(server_ip):
     print(
         str((lambda fr: max_framerate if fr > max_framerate else fr)(framerate)) + "fps"
     )
+    
+    pred = Prediction(new_model)
+    preded=''
 
     while True:
         ret, cap = VC.read()
@@ -180,7 +195,12 @@ async def udpsending(server_ip):
             )
 
             await udp_send_car_id_and_jpg(car_id, jpgImg)
-            frame_buffer_add(cap)
+            cur_preded = pred.predict(cap)
+            if cur_preded!=preded:
+                preded = cur_preded
+                print(preded)
+                if preded == 'Stop Sign':
+                    caputure.upload_and_send_request(cv2.imencode('.png', cap)[1].tobytes())
 
 def start_server(func_idx, server_ip):
     loop = asyncio.new_event_loop()
