@@ -71,6 +71,7 @@ class Prediction:
         if len(self.to_predict) == 30:
             frame_to_predict = np.array(self.to_predict[::2], dtype=np.float32)
             #print(frame_to_predict)
+            frame_to_predict = frame_to_predict.reshape(-1,15,64,64,1)
             predict = self.model.predict(frame_to_predict)
             classe = classes[np.argmax(predict)]
             self.cur_class = classe

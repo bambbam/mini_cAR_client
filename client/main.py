@@ -127,7 +127,7 @@ async def udpsending(server_ip):
     new_model = Conv3DModel()
     new_model.compile(loss='sparse_categorical_crossentropy',
                   optimizer=tf.keras.optimizers.legacy.RMSprop())
-    new_model.load_weights('client/weight/cp-0010.ckpt')
+    new_model.load_weights('client/weight/cp-0004.ckpt')
     
     s3 = client('s3',
                 aws_access_key_id = os.environ.get("aws_access_key_id"),
@@ -218,13 +218,13 @@ def _asyncio():
     t1.start()
     t2 = Thread(target=start_server, args=(1, server_public_ip))
     t2.start()
-    t3 = Thread(target=start_server, args=(2, server_public_ip))
-    t3.start()
+    #t3 = Thread(target=start_server, args=(2, server_public_ip))
+    #t3.start()
     
     
     t1.join()
     t2.join()
-    t3.join()
+    #t3.join()
 
 
 if __name__ == "__main__":
