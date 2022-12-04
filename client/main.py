@@ -22,13 +22,18 @@ if os.environ.get("mode") == "prod":
     from client.movement import handle_movement
 
 # import uuid
-
-
 # car_id = uuid.uuid4().hex
-car_id = "e208d83305274b1daa97e4465cb57c8b"
+# car_id = "e208d83305274b1daa97e4465cb57c8b"
+car_id = os.environ.get("car_id")
 
+# server_public_ip = "ec2-50-17-57-67.compute-1.amazonaws.com"
 
-#server_public_ip = "ec2-50-17-57-67.compute-1.amazonaws.com"
+client_os = os.environ.get("client_os")
+if client_os == "mac":
+    MAX_DGRAM = 9216
+else:
+    MAX_DGRAM = 2**16
+MAX_IMAGE_DGRAM = MAX_DGRAM - 64
 
 
 async def car_recieve(server_ip):
@@ -66,60 +71,10 @@ async def car_recieve(server_ip):
     writer.close()
 
 
-async def sending(server_ip):
-
-    reader, writer = await asyncio.open_connection(
-        host=server_ip, port=os.environ.get("frame_send_port")
-    )
-
-    VC = cv2.VideoCapture(0)
-
-    print("\nClient Side")
-    print("default = " + str(int(VC.get(cv2.CAP_PROP_FRAME_WIDTH))), end="x")
-    print(str(int(VC.get(cv2.CAP_PROP_FRAME_HEIGHT))), end=" ")
-    max_framerate = VC.get(cv2.CAP_PROP_FPS)
-    print(str(int(max_framerate)) + "fps")
-
-    width = int(os.environ.get("width"))
-    height = int(os.environ.get("height"))
-    framerate = int(os.environ.get("framerate"))
-
-    VC.set(cv2.CAP_PROP_FRAME_WIDTH, width)
-    VC.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
-    fr_prev_time = 0
-
-    print("current = " + str(int(VC.get(cv2.CAP_PROP_FRAME_WIDTH))), end="x")
-    print(str(int(VC.get(cv2.CAP_PROP_FRAME_HEIGHT))), end=" ")
-    print(
-        str((lambda fr: max_framerate if fr > max_framerate else fr)(framerate)) + "fps"
-    )
-
-    while True:
-        ret, cap = VC.read()
-        fr_time_elapsed = time.time() - fr_prev_time
-        if fr_time_elapsed > 1.0 / framerate:
-            fr_prev_time = time.time()
-
-            # JPEG Quality [0,100], default=95
-            # 이미지에 따라 다르지만 대부분 70-80 이상부터 이미지 크기 급격히 증가
-            if os.environ.get("mode") == "prod":
-                cap = cap[::-1]
-            ret, jpgImg = cv2.imencode(".jpg", cap, [int(cv2.IMWRITE_JPEG_QUALITY), 50])
-            car_idBin = car_id.encode("utf-8")
-            jpgBin = pickle.dumps(jpgImg)
-
-            bin = car_idBin + jpgBin
-
-            writer.write(struct.pack("<L", len(bin)) + bin)
-            await writer.drain()
-
-
 async def udpsending(server_ip):
 
     # car_id 먼저 보내고, 그 다음 jpgImg를 쪼개서 보낸다
     async def udp_send_car_id_and_jpg(car_id, jpgImg):
-        MAX_DGRAM = 2**16
-        MAX_IMAGE_DGRAM = MAX_DGRAM - 64
 
         car_idBin = car_id.encode("utf-8")
         jpgBin = pickle.dumps(jpgImg)
@@ -128,7 +83,7 @@ async def udpsending(server_ip):
         num_of_fragments = math.ceil(jpgBin_size / (MAX_IMAGE_DGRAM))
         start_pos = 0
 
-        await stream.send(car_idBin) # car_id 전송
+        await stream.send(car_idBin)  # car_id 전송
 
         while num_of_fragments:
             end_pos = min(jpgBin_size, start_pos + MAX_IMAGE_DGRAM)
@@ -139,11 +94,7 @@ async def udpsending(server_ip):
             start_pos = end_pos
             num_of_fragments -= 1
 
-
-
-    stream = await asyncio_dgram.connect(
-        (server_ip, os.environ.get("frame_send_port"))
-    )
+    stream = await asyncio_dgram.connect((server_ip, os.environ.get("frame_send_port")))
 
     VC = cv2.VideoCapture(0)
 
@@ -176,16 +127,17 @@ async def udpsending(server_ip):
 
             if os.environ.get("mode") == "prod":
                 cap = cap[::-1]
-            ret, jpgImg = cv2.imencode(".jpg", cap, [int(cv2.IMWRITE_JPEG_QUALITY), jpeg_quality])
+            ret, jpgImg = cv2.imencode(
+                ".jpg", cap, [int(cv2.IMWRITE_JPEG_QUALITY), jpeg_quality]
+            )
 
             await udp_send_car_id_and_jpg(car_id, jpgImg)
-
 
 
 def start_server(func_idx, server_ip):
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    funcs = [sending, udpsending, car_recieve]
+    funcs = [udpsending, car_recieve]
     asyncio.run(funcs[func_idx](server_ip))
 
 
@@ -194,13 +146,59 @@ def _asyncio():
     if not server_public_ip:
         server_public_ip = "127.0.0.1"
 
-    # t = Process(target=start_server, args=(0, server_public_ip))
-    # t.start()
-    t = Process(target=start_server, args=(1, server_public_ip))
+    t = Process(target=start_server, args=(0, server_public_ip))
     t.start()
-    t = Process(target=start_server, args=(2, server_public_ip))
+    t = Process(target=start_server, args=(1, server_public_ip))
     t.start()
 
 
 if __name__ == "__main__":
     _asyncio()
+
+
+# async def sending(server_ip):
+
+#     reader, writer = await asyncio.open_connection(
+#         host=server_ip, port=os.environ.get("frame_send_port")
+#     )
+
+#     VC = cv2.VideoCapture(0)
+
+#     print("\nClient Side")
+#     print("default = " + str(int(VC.get(cv2.CAP_PROP_FRAME_WIDTH))), end="x")
+#     print(str(int(VC.get(cv2.CAP_PROP_FRAME_HEIGHT))), end=" ")
+#     max_framerate = VC.get(cv2.CAP_PROP_FPS)
+#     print(str(int(max_framerate)) + "fps")
+
+#     width = int(os.environ.get("width"))
+#     height = int(os.environ.get("height"))
+#     framerate = int(os.environ.get("framerate"))
+
+#     VC.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+#     VC.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+#     fr_prev_time = 0
+
+#     print("current = " + str(int(VC.get(cv2.CAP_PROP_FRAME_WIDTH))), end="x")
+#     print(str(int(VC.get(cv2.CAP_PROP_FRAME_HEIGHT))), end=" ")
+#     print(
+#         str((lambda fr: max_framerate if fr > max_framerate else fr)(framerate)) + "fps"
+#     )
+
+#     while True:
+#         ret, cap = VC.read()
+#         fr_time_elapsed = time.time() - fr_prev_time
+#         if fr_time_elapsed > 1.0 / framerate:
+#             fr_prev_time = time.time()
+
+#             # JPEG Quality [0,100], default=95
+#             # 이미지에 따라 다르지만 대부분 70-80 이상부터 이미지 크기 급격히 증가
+#             if os.environ.get("mode") == "prod":
+#                 cap = cap[::-1]
+#             ret, jpgImg = cv2.imencode(".jpg", cap, [int(cv2.IMWRITE_JPEG_QUALITY), 50])
+#             car_idBin = car_id.encode("utf-8")
+#             jpgBin = pickle.dumps(jpgImg)
+
+#             bin = car_idBin + jpgBin
+
+#             writer.write(struct.pack("<L", len(bin)) + bin)
+#             await writer.drain()
