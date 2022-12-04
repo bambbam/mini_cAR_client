@@ -4,12 +4,15 @@ import cv2
 import numpy as np
 import logging
 import asyncio
+from collections import deque
+from itertools import islice
 #import asyncio_dgram
 import pickle
 import struct
 import time
 #from client.movement import handle_movement
 from multiprocessing import Process, Queue
+from threading import Thread
 from dotenv import load_dotenv
 import os
 from client.model import Conv3DModel, Prediction
@@ -32,6 +35,45 @@ car_id = "e208d83305274b1daa97e4465cb57c8b"
 server_public_ip = "ec2-50-17-57-67.compute-1.amazonaws.com"
 
 
+frame_buffer = deque()
+
+def frame_buffer_add(frame):
+    global frame_buffer
+    frame_buffer.append(frame)
+    while len(frame_buffer) >= 60:
+        frame_buffer.popleft()
+
+def frame_buffer_get(num_frame):
+    global frame_buffer
+    return list(islice(frame_buffer, len(frame_buffer)-num_frame, len(frame_buffer)))
+
+
+async def inference(server_ip):
+    global frame_buffer
+    new_model = Conv3DModel()
+    new_model.compile(loss='sparse_categorical_crossentropy',
+                  optimizer=tf.keras.optimizers.legacy.RMSprop())
+    new_model.load_weights('client/weight/cp-0010.ckpt')
+    
+    s3 = client('s3',
+                aws_access_key_id = os.environ.get("aws_access_key_id"),
+                aws_secret_access_key=os.environ.get("aws_secret_access_key"),
+    )
+    caputure = Capture(s3, os.environ.get("aws_bucket_name"), os.environ.get("car_id"))
+    pred = Prediction(new_model)
+    preded=''
+    while True:
+        if len(frame_buffer) >= 30:
+            cur_preded = pred.predict(frame_buffer_get(30))
+            if cur_preded!=preded:
+                preded = cur_preded
+                print(preded)
+                if preded == 'Stop Sign':
+                    caputure.upload_and_send_request(cv2.imencode('.png', frame_buffer_get(1)[0])[1].tobytes())
+        time.sleep(1.0)
+                
+        
+        
 async def car_recieve(server_ip):
     try:
         reader, writer = await asyncio.open_connection(host=server_ip, port=os.environ.get('car_receive_port'))
@@ -66,19 +108,6 @@ async def car_recieve(server_ip):
 
 
 async def sending(server_ip):
-    new_model = Conv3DModel()
-    new_model.compile(loss='sparse_categorical_crossentropy',
-                  optimizer=tf.keras.optimizers.legacy.RMSprop())
-    new_model.load_weights('client/weight/cp-0010.ckpt')
-    
-    s3 = client('s3',
-                aws_access_key_id = os.environ.get("aws_access_key_id"),
-                aws_secret_access_key=os.environ.get("aws_secret_access_key"),
-    )
-    caputure = Capture(s3, os.environ.get("aws_bucket_name"), os.environ.get("car_id"))
-    
-    
-    
     reader, writer = await asyncio.open_connection(host=server_ip, port=os.environ.get('frame_send_port'))
     VC = cv2.VideoCapture(0)
 
@@ -104,12 +133,9 @@ async def sending(server_ip):
         str((lambda fr: max_framerate if fr > max_framerate else fr)(framerate)) + "fps"
     )
 
-    pred = Prediction(new_model)
-    preded=''
+    
     while True:
         ret, cap = VC.read()
-        
-        
         fr_time_elapsed = time.time() - fr_prev_time
         if fr_time_elapsed > 1.0 / framerate:
             fr_prev_time = time.time()
@@ -125,15 +151,8 @@ async def sending(server_ip):
             bin = car_idBin + jpgBin
 
             writer.write(struct.pack("<L", len(bin)) + bin)
+            frame_buffer_add(cap)
             await writer.drain()
-            
-            cur_preded = pred.predict(cap)
-            if cur_preded!=preded:
-                preded = cur_preded
-                print(preded)
-                if preded == 'Stop Sign':
-                    caputure.upload_and_send_request(cv2.imencode('.png', cap)[1].tobytes())
-                
             
 
 
@@ -189,7 +208,7 @@ async def udpsending(server_ip):
 def start_server(func_idx, server_ip):
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    funcs = [sending, udpsending, car_recieve]
+    funcs = [sending, udpsending, car_recieve, inference]
     asyncio.run(funcs[func_idx](server_ip))
 
 
@@ -198,13 +217,20 @@ def _asyncio():
     if not server_public_ip:
         server_public_ip = '127.0.0.1'
 
-    t = Process(target=start_server, args=(0, server_public_ip))
-    t.start()
+    t1 = Thread(target=start_server, args=(0, server_public_ip))
+    t1.start()
     #t = Process(target=start_server, args=(1, server_public_ip))
     #t.start()
-    t = Process(target=start_server, args=(2, server_public_ip))
-    t.start()
-
+    t2 = Thread(target=start_server, args=(2, server_public_ip))
+    t2.start()
+    
+    t3 = Thread(target=start_server, args=(3, server_public_ip))
+    t3.start()
+    
+    
+    t1.join()
+    t2.join()
+    t3.join()
 
 if __name__ == "__main__":
     _asyncio()
