@@ -57,7 +57,10 @@ def frame_buffer_add(frame):
 
 def frame_buffer_get(num_frame):
     global frame_buffer
-    return list(islice(frame_buffer, len(frame_buffer)-num_frame, len(frame_buffer)))
+    ret = []
+    for frame_idx in range(len(frame_buffer)-num_frame, len(frame_buffer)):
+        ret.append(frame_buffer[frame_idx][::])
+    return ret
 
 
 async def inference(server_ip):
