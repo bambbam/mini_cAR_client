@@ -17,7 +17,7 @@ import math
 
 # from client.movement import handle_movement
 from multiprocessing import Process, Queue
-from threading import Thread
+from threading import Thread, Lock
 from dotenv import load_dotenv
 import os
 
@@ -49,17 +49,23 @@ MAX_IMAGE_DGRAM = MAX_DGRAM - 64
 
 frame_buffer = deque()
 
+
+lock = Lock()
 def frame_buffer_add(frame):
-    global frame_buffer
+    global frame_buffer, lock
+    lock.acquire()
     frame_buffer.append(frame)
     while len(frame_buffer) >= 60:
         frame_buffer.popleft()
+    lock.release()
 
 def frame_buffer_get(num_frame):
-    global frame_buffer
+    global frame_buffer, lock
     ret = []
+    lock.acquire()
     for frame_idx in range(len(frame_buffer)-num_frame, len(frame_buffer)):
         ret.append(frame_buffer[frame_idx][::])
+    lock.release()
     return ret
 
 
@@ -78,7 +84,10 @@ async def inference(server_ip):
     pred = Prediction(new_model)
     preded=''
     while True:
-        if len(frame_buffer) >= 30:
+        lock.acquire()
+        length = len(frame_buffer)
+        lock.release()
+        if length >= 30:
             cur_preded = pred.predict(frame_buffer_get(30))
             if cur_preded!=preded:
                 preded = cur_preded
