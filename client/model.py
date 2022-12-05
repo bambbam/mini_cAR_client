@@ -86,7 +86,7 @@ if __name__=="__main__":
     new_model = Conv3DModel()
     new_model.compile(loss='sparse_categorical_crossentropy',
                   optimizer=tf.keras.optimizers.legacy.RMSprop())
-    new_model.load_weights('weight/cp-0004.ckpt')
+    new_model.load_weights('weight/cp-0010.ckpt')
     pred = Prediction(new_model)
     cap = cv2.VideoCapture(0)
     classe =''
