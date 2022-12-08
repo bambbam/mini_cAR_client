@@ -1,12 +1,13 @@
 from enum import Enum
-import os
-if os.environ.get("mode")=="prod":
+from client.config import get_settings
+if get_settings().mode.value=="prod":
     import RPi.GPIO as GPIO
 import time
 import threading
 from client.singleton import Singleton
 import asyncio
 
+setting = get_settings()
 class Movement(Enum):
     nothing = 0
     forward = 1
@@ -127,7 +128,7 @@ class CarController(Singleton):
         while True: 
             cls.sema.acquire()
             print(cls.control, cls.delay)
-            if os.environ.get("mode")=="prod":
+            if setting.mode.value == "prod":
                 handle_movement_with_delay(cls.control, cls.delay)                
             cls.control = 0;
             cls.count = 0

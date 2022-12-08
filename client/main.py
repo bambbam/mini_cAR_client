@@ -11,34 +11,31 @@ import asyncio_dgram
 import pickle
 import struct
 import time
-import sys
 import math
 
-# from client.movement import handle_movement
-from multiprocessing import Process, Queue
 from threading import Thread, Lock
-from dotenv import load_dotenv
-import os
 
 from client.model import Conv3DModel, Prediction
 import tensorflow as tf
-from boto3 import client, resource
+
 from client.model import handle_gesture
 
-load_dotenv()
 from client.movement import CarController
-if os.environ.get("mode") == "prod":
+from client.config import get_settings
+
+setting = get_settings()
+if setting.mode.value == "prod":
     import RPi.GPIO as GPIO
     
 
 # import uuid
 # car_id = uuid.uuid4().hex
 # car_id = "e208d83305274b1daa97e4465cb57c8b"
-car_id = os.environ.get("car_id")
+car_id = setting.car_id
 
 # server_public_ip = "ec2-50-17-57-67.compute-1.amazonaws.com"
 
-client_os = os.environ.get("client_os")
+client_os = setting.client_os
 if client_os == "mac":
     MAX_DGRAM = 9216
 else:
@@ -92,7 +89,7 @@ async def inference(server_ip):
 async def car_recieve(server_ip):
     try:
         reader, writer = await asyncio.open_connection(
-            host=server_ip, port=os.environ.get("car_receive_port")
+            host=server_ip, port=setting.car_receive_port
         )
     except:
         logging.warning("connection failed")
@@ -118,7 +115,7 @@ async def car_recieve(server_ip):
             await writer.drain()
     except KeyboardInterrupt:
         pass
-    if os.environ.get("mode") == "prod":
+    if setting.mode.value == "prod":
         GPIO.cleanup()
     writer.close()
 
@@ -145,7 +142,7 @@ async def udpsending(server_ip):
             start_pos = end_pos
             num_of_fragments -= 1
 
-    stream = await asyncio_dgram.connect((server_ip, os.environ.get("frame_send_port")))
+    stream = await asyncio_dgram.connect((server_ip, setting.frame_send_port))
     VC = cv2.VideoCapture(0)
 
     print("\nClient Side")
@@ -154,10 +151,10 @@ async def udpsending(server_ip):
     max_framerate = VC.get(cv2.CAP_PROP_FPS)
     print(str(int(max_framerate)) + "fps)")
 
-    width = int(os.environ.get("width"))
-    height = int(os.environ.get("height"))
-    framerate = int(os.environ.get("framerate"))
-    jpeg_quality = int(os.environ.get("jpeg_quality"))
+    width = int(setting.width)
+    height = int(setting.height)
+    framerate = int(setting.framerate)
+    jpeg_quality = int(setting.jpeg_quality)
 
     VC.set(cv2.CAP_PROP_FRAME_WIDTH, width)
     VC.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
@@ -176,7 +173,7 @@ async def udpsending(server_ip):
         if fr_time_elapsed > 1.0 / framerate:
             fr_prev_time = time.time()
 
-            if os.environ.get("mode") == "prod":
+            if setting.mode.value == "prod":
                 cap = cap[::-1]
             ret, jpgImg = cv2.imencode(
                 ".jpg", cap, [int(cv2.IMWRITE_JPEG_QUALITY), jpeg_quality]
@@ -196,7 +193,7 @@ def run_car_control():
     
 
 def _asyncio():
-    server_public_ip = os.environ.get("server_ip")
+    server_public_ip = setting.server_ip
     if not server_public_ip:
         server_public_ip = "127.0.0.1"
     

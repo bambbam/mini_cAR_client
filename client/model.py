@@ -2,14 +2,14 @@ import tensorflow as tf
 import numpy as np
 import cv2
 from time import sleep
-import os
-from dotenv import load_dotenv
 from enum import Enum
 import requests
 import asyncio
-load_dotenv()
 from client.movement import Movement, CarController
     
+
+from client.config import get_settings
+setting = get_settings()
 
 
 classes =  [
@@ -95,7 +95,7 @@ class CameraControl(Enum):
     videostop = 2
 
 def request_server(ctrl : CameraControl, car_id: str):
-    server_url = "http://" + os.environ.get("server_ip") + ':' + str(os.environ.get("server_port"))
+    server_url = "http://" + setting.server_ip + ':' + str(setting.server_port)
     obj = {
         "car_id" : car_id,
         "ctrl" : ctrl.value,
@@ -117,11 +117,11 @@ def handle_gesture(ges:str):
         controller.set_control(Movement.stop.value, 2.0)
     
     if ges=='Thumb Up':
-        request_server(CameraControl.videostart, os.environ.get("car_id"))
+        request_server(CameraControl.videostart, setting.car_id)
     if ges=='Thumb Down':
-        request_server(CameraControl.videostop, os.environ.get("car_id"))
+        request_server(CameraControl.videostop, setting.car_id)
     if ges=='Shaking Hand':
-        request_server(CameraControl.getphoto, os.environ.get("car_id"))
+        request_server(CameraControl.getphoto, setting.car_id)
     
     
 
