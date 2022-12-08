@@ -84,7 +84,7 @@ async def inference(server_ip):
             cur_preded = pred.predict(frame_buffer_get(30))
             if cur_preded!=preded:
                 preded = cur_preded
-                await handle_gesture(preded)
+                handle_gesture(preded)
         time.sleep(1.0)
                 
         
