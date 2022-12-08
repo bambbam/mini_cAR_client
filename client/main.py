@@ -1,4 +1,3 @@
-from http import server
 from typing import Any
 import cv2
 import numpy as np
@@ -23,9 +22,8 @@ import os
 
 from client.model import Conv3DModel, Prediction
 import tensorflow as tf
-from client.capture import Capture
 from boto3 import client, resource
-
+from client.model import handle_gesture
 
 load_dotenv()
 if os.environ.get("mode") == "prod":
@@ -75,12 +73,6 @@ async def inference(server_ip):
     new_model.compile(loss='sparse_categorical_crossentropy',
                   optimizer=tf.keras.optimizers.legacy.RMSprop())
     new_model.load_weights('client/weight/cp-0010.ckpt')
-    
-    s3 = client('s3',
-                aws_access_key_id = os.environ.get("aws_access_key_id"),
-                aws_secret_access_key=os.environ.get("aws_secret_access_key"),
-    )
-    caputure = Capture(s3, os.environ.get("aws_bucket_name"), os.environ.get("car_id"))
     pred = Prediction(new_model)
     preded=''
     while True:
@@ -91,9 +83,7 @@ async def inference(server_ip):
             cur_preded = pred.predict(frame_buffer_get(30))
             if cur_preded!=preded:
                 preded = cur_preded
-                print(preded)
-                if preded == 'Stop Sign':
-                    caputure.upload_and_send_request(cv2.imencode('.png', frame_buffer_get(1)[0])[1].tobytes())
+                handle_gesture(preded)
         time.sleep(1.0)
                 
         
@@ -171,6 +161,7 @@ async def udpsending(server_ip):
 
     VC.set(cv2.CAP_PROP_FRAME_WIDTH, width)
     VC.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+    VC.set(cv2.CAP_PROP_FPS, framerate)
     fr_prev_time = 0
 
     print("current = " + str(int(VC.get(cv2.CAP_PROP_FRAME_WIDTH))), end="x")

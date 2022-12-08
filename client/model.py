@@ -2,8 +2,17 @@ import tensorflow as tf
 import numpy as np
 import cv2
 from time import sleep
+import os
+from dotenv import load_dotenv
+from enum import Enum
+import requests
+load_dotenv()
 
-classes = classes = [
+if os.environ.get("mode")=="prod":
+    from client.movement import Movement, handle_movement
+
+
+classes =  [
     'Swiping Left',
     'Swiping Right',
     'Swiping Down',
@@ -80,7 +89,39 @@ class Prediction:
         
         return self.cur_class
 
+class CameraControl(Enum):
+    getphoto = 0
+    videostart = 1
+    videostop = 2
 
+def request_server(ctrl : CameraControl, car_id: str):
+    server_url = "http://" + os.environ.get("server_ip") + ':' + str(os.environ.get("server_port"))
+    obj = {
+        "car_id" : car_id,
+        "ctrl" : ctrl.value,
+    }
+    requests.post(server_url+"/stream", json=obj)
+    
+def handle_gesture(ges:str):
+    print(ges)
+    if os.environ.get("mode")=="dev":
+        return
+    if ges=="Swiping Left":        
+        handle_movement(Movement.left.value)
+    if ges=='Swiping Right':
+        handle_movement(Movement.right.value)
+    if ges=='Swiping Up':
+        handle_movement(Movement.forward.value)
+    if ges=='Swiping Down':
+        handle_movement(Movement.backward.value)
+    if ges=='Thumb Up':
+        request_server(CameraControl.videostart, os.environ.get("car_id"))
+    if ges=='Thumb Down':
+        request_server(CameraControl.videostop, os.environ.get("car_id"))
+    if ges=='Shaking Hand':
+        request_server(CameraControl.getphoto, os.environ.get("car_id"))
+    
+    
 
 if __name__=="__main__":
     new_model = Conv3DModel()
