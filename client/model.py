@@ -6,6 +6,7 @@ import os
 from dotenv import load_dotenv
 from enum import Enum
 import requests
+import asyncio
 load_dotenv()
 
 if os.environ.get("mode")=="prod":
@@ -94,7 +95,7 @@ class CameraControl(Enum):
     videostart = 1
     videostop = 2
 
-def request_server(ctrl : CameraControl, car_id: str):
+async def request_server(ctrl : CameraControl, car_id: str):
     server_url = "http://" + os.environ.get("server_ip") + ':' + str(os.environ.get("server_port"))
     obj = {
         "car_id" : car_id,
@@ -116,12 +117,19 @@ async def handle_gesture(ges:str):
         handle_movement(Movement.backward.value)
     if ges=='Stop Sign':
         handle_movement(Movement.stop.value)
+    async def asyncstop():
+        await asyncio.sleep(3)
+        handle_movement(Movement.stop.value)
+    to_wait = []
+    to_wait.append(asyncstop())
+    
     if ges=='Thumb Up':
-        request_server(CameraControl.videostart, os.environ.get("car_id"))
+        to_wait.append(request_server(CameraControl.videostart, os.environ.get("car_id")))
     if ges=='Thumb Down':
-        request_server(CameraControl.videostop, os.environ.get("car_id"))
+        to_wait.append(request_server(CameraControl.videostop, os.environ.get("car_id")))
     if ges=='Shaking Hand':
-        request_server(CameraControl.getphoto, os.environ.get("car_id"))
+        to_wait.append(request_server(CameraControl.getphoto, os.environ.get("car_id")))
+    await asyncio.gather(*to_wait)
     
     
 
