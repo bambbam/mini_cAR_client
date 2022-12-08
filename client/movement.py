@@ -105,7 +105,8 @@ def handle_movement(x : int):
 def handle_movement_with_delay(x: int, delay: float = 0.0):
     handle_movement(x)
     time.sleep(delay)
-    handle_movement(Movement.stop.value)
+    if delay != 0.0:
+        handle_movement(Movement.stop.value)
 
 class CarController(Singleton):
     sema = threading.Semaphore(0)

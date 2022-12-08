@@ -94,7 +94,7 @@ class CameraControl(Enum):
     videostart = 1
     videostop = 2
 
-async def request_server(ctrl : CameraControl, car_id: str):
+def request_server(ctrl : CameraControl, car_id: str):
     server_url = "http://" + os.environ.get("server_ip") + ':' + str(os.environ.get("server_port"))
     obj = {
         "car_id" : car_id,
@@ -102,7 +102,7 @@ async def request_server(ctrl : CameraControl, car_id: str):
     }
     requests.post(server_url+"/stream", json=obj)
     
-async def handle_gesture(ges:str):
+def handle_gesture(ges:str):
     print(ges)
     controller = CarController()
     if ges=="Swiping Left":        

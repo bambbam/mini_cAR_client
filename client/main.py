@@ -111,7 +111,7 @@ async def car_recieve(server_ip):
             buffer = buffer[4:]
             movement = struct.unpack("<L", movement)[0]
             if movement != 0:
-                CarController.set_control(movement)
+                CarController().set_control(movement)
                 
             bin = pickle.dumps(recved_msg)
             writer.write(struct.pack("<L", len(bin)) + bin)
