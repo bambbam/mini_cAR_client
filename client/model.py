@@ -102,7 +102,7 @@ def request_server(ctrl : CameraControl, car_id: str):
     }
     requests.post(server_url+"/stream", json=obj)
     
-def handle_gesture(ges:str):
+async def handle_gesture(ges:str):
     print(ges)
     if os.environ.get("mode")=="dev":
         return
@@ -114,6 +114,8 @@ def handle_gesture(ges:str):
         handle_movement(Movement.forward.value)
     if ges=='Swiping Down':
         handle_movement(Movement.backward.value)
+    if ges=='Stop Sign':
+        handle_movement(Movement.stop.value)
     if ges=='Thumb Up':
         request_server(CameraControl.videostart, os.environ.get("car_id"))
     if ges=='Thumb Down':
