@@ -8,9 +8,8 @@ from enum import Enum
 import requests
 import asyncio
 load_dotenv()
-
-if os.environ.get("mode")=="prod":
-    from client.movement import Movement, handle_movement
+from client.movement import Movement, CarController
+    
 
 
 classes =  [
@@ -105,31 +104,24 @@ async def request_server(ctrl : CameraControl, car_id: str):
     
 async def handle_gesture(ges:str):
     print(ges)
-    if os.environ.get("mode")=="dev":
-        return
+    controller = CarController()
     if ges=="Swiping Left":        
-        handle_movement(Movement.left.value)
+        controller.set_control(Movement.left.value, 2.0)
     if ges=='Swiping Right':
-        handle_movement(Movement.right.value)
+        controller.set_control(Movement.right.value, 2.0)
     if ges=='Swiping Up':
-        handle_movement(Movement.forward.value)
+        controller.set_control(Movement.forward.value, 2.0)
     if ges=='Swiping Down':
-        handle_movement(Movement.backward.value)
+        controller.set_control(Movement.backward.value, 2.0)
     if ges=='Stop Sign':
-        handle_movement(Movement.stop.value)
-    async def asyncstop():
-        await asyncio.sleep(3)
-        handle_movement(Movement.stop.value)
-    to_wait = []
-    to_wait.append(asyncstop())
+        controller.set_control(Movement.stop.value, 2.0)
     
     if ges=='Thumb Up':
-        to_wait.append(request_server(CameraControl.videostart, os.environ.get("car_id")))
+        request_server(CameraControl.videostart, os.environ.get("car_id"))
     if ges=='Thumb Down':
-        to_wait.append(request_server(CameraControl.videostop, os.environ.get("car_id")))
+        request_server(CameraControl.videostop, os.environ.get("car_id"))
     if ges=='Shaking Hand':
-        to_wait.append(request_server(CameraControl.getphoto, os.environ.get("car_id")))
-    await asyncio.gather(*to_wait)
+        request_server(CameraControl.getphoto, os.environ.get("car_id"))
     
     
 

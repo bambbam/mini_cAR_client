@@ -1,9 +1,12 @@
 from enum import Enum
-import RPi.GPIO as GPIO
+import os
+if os.environ.get("mode")=="prod":
+    import RPi.GPIO as GPIO
 import time
-from copy import deepcopy
-import multiprocessing
+import threading
 from client.singleton import Singleton
+import asyncio
+
 class Movement(Enum):
     nothing = 0
     forward = 1
@@ -82,7 +85,6 @@ class BaseSetting(Singleton):
 
 def handle_movement(x : int):
     x = Movement(x)
-    
     if x == Movement.stop:
         BaseSetting().stop()
     elif x == Movement.beep:
@@ -99,3 +101,32 @@ def handle_movement(x : int):
         BaseSetting().move(x)
         if x != Movement.nothing:
             BaseSetting().prevMove = x
+            
+def handle_movement_with_delay(x: int, delay: float = 0.0):
+    handle_movement(x)
+    time.sleep(delay)
+    handle_movement(Movement.stop.value)
+
+class CarController(Singleton):
+    sema = threading.Semaphore(0)
+    control = 0
+    delay = 0
+    count = 0
+    
+    @classmethod
+    def set_control(cls, control, delay = 0.0):
+        cls.control = control
+        cls.delay = delay
+        if cls.count == 0:
+            cls.sema.release()
+        cls.count += 1
+    
+    @classmethod
+    def run(cls):
+        while True: 
+            cls.sema.acquire()
+            print(cls.control, cls.delay)
+            if os.environ.get("mode")=="prod":
+                handle_movement_with_delay(cls.control, cls.delay)                
+            cls.control = 0;
+            cls.count = 0

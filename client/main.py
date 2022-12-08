@@ -26,9 +26,10 @@ from boto3 import client, resource
 from client.model import handle_gesture
 
 load_dotenv()
+from client.movement import CarController
 if os.environ.get("mode") == "prod":
     import RPi.GPIO as GPIO
-    from client.movement import handle_movement
+    
 
 # import uuid
 # car_id = uuid.uuid4().hex
@@ -110,9 +111,8 @@ async def car_recieve(server_ip):
             buffer = buffer[4:]
             movement = struct.unpack("<L", movement)[0]
             if movement != 0:
-                print(movement)
-            if os.environ.get("mode") == "prod":
-                handle_movement(movement)
+                CarController.set_control(movement)
+                
             bin = pickle.dumps(recved_msg)
             writer.write(struct.pack("<L", len(bin)) + bin)
             await writer.drain()
@@ -152,7 +152,7 @@ async def udpsending(server_ip):
     print("default = " + str(int(VC.get(cv2.CAP_PROP_FRAME_WIDTH))), end="x")
     print(str(int(VC.get(cv2.CAP_PROP_FRAME_HEIGHT))), end=" ")
     max_framerate = VC.get(cv2.CAP_PROP_FPS)
-    print(str(int(max_framerate)) + "fps")
+    print(str(int(max_framerate)) + "fps)")
 
     width = int(os.environ.get("width"))
     height = int(os.environ.get("height"))
@@ -191,23 +191,28 @@ def start_server(func_idx, server_ip):
     funcs = [udpsending, car_recieve, inference]
     asyncio.run(funcs[func_idx](server_ip))
 
+def run_car_control():
+    CarController.run()
+    
 
 def _asyncio():
     server_public_ip = os.environ.get("server_ip")
     if not server_public_ip:
         server_public_ip = "127.0.0.1"
-
+    
     t1 = Thread(target=start_server, args=(0, server_public_ip))
     t1.start()
     t2 = Thread(target=start_server, args=(1, server_public_ip))
     t2.start()
     t3 = Thread(target=start_server, args=(2, server_public_ip))
     t3.start()
-    
+    t4 = Thread(target=run_car_control, args=())
+    t4.start()
     
     t1.join()
     t2.join()
     t3.join()
+    t4.join()
 
 
 if __name__ == "__main__":
