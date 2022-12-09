@@ -3,6 +3,7 @@ import cv2
 import numpy as np
 import logging
 import asyncio
+import uvloop
 from collections import deque
 from itertools import islice
 
@@ -26,7 +27,7 @@ from client.config import get_settings
 setting = get_settings()
 if setting.mode.value == "prod":
     import RPi.GPIO as GPIO
-    
+
 
 # import uuid
 # car_id = uuid.uuid4().hex
@@ -47,6 +48,8 @@ frame_buffer = deque()
 
 
 lock = Lock()
+
+
 def frame_buffer_add(frame):
     global frame_buffer, lock
     lock.acquire()
@@ -55,11 +58,12 @@ def frame_buffer_add(frame):
         frame_buffer.popleft()
     lock.release()
 
+
 def frame_buffer_get(num_frame):
     global frame_buffer, lock
     ret = []
     lock.acquire()
-    for frame_idx in range(len(frame_buffer)-num_frame, len(frame_buffer)):
+    for frame_idx in range(len(frame_buffer) - num_frame, len(frame_buffer)):
         ret.append(frame_buffer[frame_idx][::])
     lock.release()
     return ret
@@ -68,24 +72,25 @@ def frame_buffer_get(num_frame):
 async def inference(server_ip):
     global frame_buffer
     new_model = Conv3DModel()
-    new_model.compile(loss='sparse_categorical_crossentropy',
-                  optimizer=tf.keras.optimizers.legacy.RMSprop())
-    new_model.load_weights('client/weight/cp-0010.ckpt')
+    new_model.compile(
+        loss="sparse_categorical_crossentropy",
+        optimizer=tf.keras.optimizers.legacy.RMSprop(),
+    )
+    new_model.load_weights("client/weight/cp-0010.ckpt")
     pred = Prediction(new_model)
-    preded=''
+    preded = ""
     while True:
         lock.acquire()
         length = len(frame_buffer)
         lock.release()
         if length >= 30:
             cur_preded = pred.predict(frame_buffer_get(30))
-            if cur_preded!=preded:
+            if cur_preded != preded:
                 preded = cur_preded
                 handle_gesture(preded)
         time.sleep(1.0)
-                
-        
-        
+
+
 async def car_recieve(server_ip):
     try:
         reader, writer = await asyncio.open_connection(
@@ -109,7 +114,7 @@ async def car_recieve(server_ip):
             movement = struct.unpack("<L", movement)[0]
             if movement != 0:
                 CarController().set_control(movement)
-                
+
             bin = pickle.dumps(recved_msg)
             writer.write(struct.pack("<L", len(bin)) + bin)
             await writer.drain()
@@ -182,21 +187,23 @@ async def udpsending(server_ip):
             await udp_send_car_id_and_jpg(car_id, jpgImg)
             frame_buffer_add(cap)
 
+
 def start_server(func_idx, server_ip):
-    loop = asyncio.new_event_loop()
+    loop = uvloop.new_event_loop()
     asyncio.set_event_loop(loop)
     funcs = [udpsending, car_recieve, inference]
     asyncio.run(funcs[func_idx](server_ip))
 
+
 def run_car_control():
     CarController.run()
-    
+
 
 def _asyncio():
     server_public_ip = setting.server_ip
     if not server_public_ip:
         server_public_ip = "127.0.0.1"
-    
+
     t1 = Thread(target=start_server, args=(0, server_public_ip))
     t1.start()
     t2 = Thread(target=start_server, args=(1, server_public_ip))
@@ -205,7 +212,7 @@ def _asyncio():
     t3.start()
     t4 = Thread(target=run_car_control, args=())
     t4.start()
-    
+
     t1.join()
     t2.join()
     t3.join()
