@@ -2,8 +2,17 @@ import tensorflow as tf
 import numpy as np
 import cv2
 from time import sleep
+from enum import Enum
+import requests
+import asyncio
+from client.movement import Movement, CarController
+    
 
-classes = classes = [
+from client.config import get_settings
+setting = get_settings()
+
+
+classes =  [
     'Swiping Left',
     'Swiping Right',
     'Swiping Down',
@@ -80,7 +89,41 @@ class Prediction:
         
         return self.cur_class
 
+class CameraControl(Enum):
+    getphoto = 0
+    videostart = 1
+    videostop = 2
 
+def request_server(ctrl : CameraControl, car_id: str):
+    server_url = "http://" + setting.server_ip + ':' + str(setting.server_port)
+    obj = {
+        "car_id" : car_id,
+        "ctrl" : ctrl.value,
+    }
+    requests.post(server_url+"/stream", json=obj)
+    
+def handle_gesture(ges:str):
+    print(ges)
+    controller = CarController()
+    if ges=="Swiping Left":        
+        controller.set_control(Movement.left.value, 2.0)
+    if ges=='Swiping Right':
+        controller.set_control(Movement.right.value, 2.0)
+    if ges=='Swiping Up':
+        controller.set_control(Movement.forward.value, 2.0)
+    if ges=='Swiping Down':
+        controller.set_control(Movement.backward.value, 2.0)
+    if ges=='Stop Sign':
+        controller.set_control(Movement.stop.value, 2.0)
+    
+    if ges=='Thumb Up':
+        request_server(CameraControl.videostart, setting.car_id)
+    if ges=='Thumb Down':
+        request_server(CameraControl.videostop, setting.car_id)
+    if ges=='Shaking Hand':
+        request_server(CameraControl.getphoto, setting.car_id)
+    
+    
 
 if __name__=="__main__":
     new_model = Conv3DModel()

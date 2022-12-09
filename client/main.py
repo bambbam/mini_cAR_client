@@ -1,9 +1,9 @@
-from http import server
 from typing import Any
 import cv2
 import numpy as np
 import logging
 import asyncio
+import uvloop
 from collections import deque
 from itertools import islice
 
@@ -12,34 +12,31 @@ import asyncio_dgram
 import pickle
 import struct
 import time
-import sys
 import math
 
-# from client.movement import handle_movement
-from multiprocessing import Process, Queue
 from threading import Thread, Lock
-from dotenv import load_dotenv
-import os
 
 from client.model import Conv3DModel, Prediction
 import tensorflow as tf
-from client.capture import Capture
-from boto3 import client, resource
 
+from client.model import handle_gesture
 
-load_dotenv()
-if os.environ.get("mode") == "prod":
+from client.movement import CarController
+from client.config import get_settings
+
+setting = get_settings()
+if setting.mode.value == "prod":
     import RPi.GPIO as GPIO
-    from client.movement import handle_movement
+
 
 # import uuid
 # car_id = uuid.uuid4().hex
 # car_id = "e208d83305274b1daa97e4465cb57c8b"
-car_id = os.environ.get("car_id")
+car_id = setting.car_id
 
 # server_public_ip = "ec2-50-17-57-67.compute-1.amazonaws.com"
 
-client_os = os.environ.get("client_os")
+client_os = setting.client_os
 if client_os == "mac":
     MAX_DGRAM = 9216
 else:
@@ -51,6 +48,8 @@ frame_buffer = deque()
 
 
 lock = Lock()
+
+
 def frame_buffer_add(frame):
     global frame_buffer, lock
     lock.acquire()
@@ -59,11 +58,12 @@ def frame_buffer_add(frame):
         frame_buffer.popleft()
     lock.release()
 
+
 def frame_buffer_get(num_frame):
     global frame_buffer, lock
     ret = []
     lock.acquire()
-    for frame_idx in range(len(frame_buffer)-num_frame, len(frame_buffer)):
+    for frame_idx in range(len(frame_buffer) - num_frame, len(frame_buffer)):
         ret.append(frame_buffer[frame_idx][::])
     lock.release()
     return ret
@@ -72,36 +72,29 @@ def frame_buffer_get(num_frame):
 async def inference(server_ip):
     global frame_buffer
     new_model = Conv3DModel()
-    new_model.compile(loss='sparse_categorical_crossentropy',
-                  optimizer=tf.keras.optimizers.legacy.RMSprop())
-    new_model.load_weights('client/weight/cp-0010.ckpt')
-    
-    s3 = client('s3',
-                aws_access_key_id = os.environ.get("aws_access_key_id"),
-                aws_secret_access_key=os.environ.get("aws_secret_access_key"),
+    new_model.compile(
+        loss="sparse_categorical_crossentropy",
+        optimizer=tf.keras.optimizers.legacy.RMSprop(),
     )
-    caputure = Capture(s3, os.environ.get("aws_bucket_name"), os.environ.get("car_id"))
+    new_model.load_weights("client/weight/cp-0010.ckpt")
     pred = Prediction(new_model)
-    preded=''
+    preded = ""
     while True:
         lock.acquire()
         length = len(frame_buffer)
         lock.release()
         if length >= 30:
             cur_preded = pred.predict(frame_buffer_get(30))
-            if cur_preded!=preded:
+            if cur_preded != preded:
                 preded = cur_preded
-                print(preded)
-                if preded == 'Stop Sign':
-                    caputure.upload_and_send_request(cv2.imencode('.png', frame_buffer_get(1)[0])[1].tobytes())
+                handle_gesture(preded)
         time.sleep(1.0)
-                
-        
-        
+
+
 async def car_recieve(server_ip):
     try:
         reader, writer = await asyncio.open_connection(
-            host=server_ip, port=os.environ.get("car_receive_port")
+            host=server_ip, port=setting.car_receive_port
         )
     except:
         logging.warning("connection failed")
@@ -120,15 +113,14 @@ async def car_recieve(server_ip):
             buffer = buffer[4:]
             movement = struct.unpack("<L", movement)[0]
             if movement != 0:
-                print(movement)
-            if os.environ.get("mode") == "prod":
-                handle_movement(movement)
+                CarController().set_control(movement)
+
             bin = pickle.dumps(recved_msg)
             writer.write(struct.pack("<L", len(bin)) + bin)
             await writer.drain()
     except KeyboardInterrupt:
         pass
-    if os.environ.get("mode") == "prod":
+    if setting.mode.value == "prod":
         GPIO.cleanup()
     writer.close()
 
@@ -155,22 +147,23 @@ async def udpsending(server_ip):
             start_pos = end_pos
             num_of_fragments -= 1
 
-    stream = await asyncio_dgram.connect((server_ip, os.environ.get("frame_send_port")))
+    stream = await asyncio_dgram.connect((server_ip, setting.frame_send_port))
     VC = cv2.VideoCapture(0)
 
     print("\nClient Side")
     print("default = " + str(int(VC.get(cv2.CAP_PROP_FRAME_WIDTH))), end="x")
     print(str(int(VC.get(cv2.CAP_PROP_FRAME_HEIGHT))), end=" ")
     max_framerate = VC.get(cv2.CAP_PROP_FPS)
-    print(str(int(max_framerate)) + "fps")
+    print(str(int(max_framerate)) + "fps)")
 
-    width = int(os.environ.get("width"))
-    height = int(os.environ.get("height"))
-    framerate = int(os.environ.get("framerate"))
-    jpeg_quality = int(os.environ.get("jpeg_quality"))
+    width = int(setting.width)
+    height = int(setting.height)
+    framerate = int(setting.framerate)
+    jpeg_quality = int(setting.jpeg_quality)
 
     VC.set(cv2.CAP_PROP_FRAME_WIDTH, width)
     VC.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+    VC.set(cv2.CAP_PROP_FPS, framerate)
     fr_prev_time = 0
 
     print("current = " + str(int(VC.get(cv2.CAP_PROP_FRAME_WIDTH))), end="x")
@@ -185,7 +178,7 @@ async def udpsending(server_ip):
         if fr_time_elapsed > 1.0 / framerate:
             fr_prev_time = time.time()
 
-            if os.environ.get("mode") == "prod":
+            if setting.mode.value == "prod":
                 cap = cap[::-1]
             ret, jpgImg = cv2.imencode(
                 ".jpg", cap, [int(cv2.IMWRITE_JPEG_QUALITY), jpeg_quality]
@@ -194,15 +187,20 @@ async def udpsending(server_ip):
             await udp_send_car_id_and_jpg(car_id, jpgImg)
             frame_buffer_add(cap)
 
+
 def start_server(func_idx, server_ip):
-    loop = asyncio.new_event_loop()
+    loop = uvloop.new_event_loop()
     asyncio.set_event_loop(loop)
     funcs = [udpsending, car_recieve, inference]
     asyncio.run(funcs[func_idx](server_ip))
 
 
+def run_car_control():
+    CarController.run()
+
+
 def _asyncio():
-    server_public_ip = os.environ.get("server_ip")
+    server_public_ip = setting.server_ip
     if not server_public_ip:
         server_public_ip = "127.0.0.1"
 
@@ -212,11 +210,13 @@ def _asyncio():
     t2.start()
     t3 = Thread(target=start_server, args=(2, server_public_ip))
     t3.start()
-    
-    
+    t4 = Thread(target=run_car_control, args=())
+    t4.start()
+
     t1.join()
     t2.join()
     t3.join()
+    t4.join()
 
 
 if __name__ == "__main__":
