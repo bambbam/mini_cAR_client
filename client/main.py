@@ -21,7 +21,7 @@ import tensorflow as tf
 
 from client.model import handle_gesture
 
-from client.movement import CarController
+from client.movement import CarController, handle_movement
 from client.config import get_settings
 
 setting = get_settings()
@@ -88,8 +88,11 @@ async def inference(server_ip):
             if cur_preded != preded:
                 preded = cur_preded
                 handle_gesture(preded)
+        if setting.mode.value == "prod":
+            handle_movement(9)
         time.sleep(1.0)
-
+        if setting.mode.value == "prod":
+            handle_movement(10)
 
 async def car_recieve(server_ip):
     try:

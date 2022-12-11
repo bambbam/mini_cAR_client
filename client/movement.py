@@ -18,6 +18,8 @@ class Movement(Enum):
     beep = 6
     speedup = 7
     speeddown = 8
+    ledon = 9
+    ledoff = 10
 
 class BaseSetting(Singleton):
     t = 0
@@ -36,6 +38,9 @@ class BaseSetting(Singleton):
         self.BIN2 = 24
         self.BUZZER = 12
         self.SPEED = 50
+        self.LED_FRONT_1 = 16
+        self.LED_FRONT_2 = 26
+        
         self.prevMove = Movement.nothing
 
         GPIO.setwarnings(False)
@@ -49,12 +54,23 @@ class BaseSetting(Singleton):
         GPIO.setup(self.BIN1, GPIO.OUT)
         GPIO.setup(self.BIN2, GPIO.OUT)
         GPIO.setup(self.BUZZER, GPIO.OUT)
+        GPIO.setup(self.LED_FRONT_1, GPIO.OUT)
+        GPIO.setup(self.LED_FRONT_2, GPIO.OUT)
 
         self.L_Motor = GPIO.PWM(self.PWMA, 500)
         self.L_Motor.start(0)
         self.R_Motor = GPIO.PWM(self.PWMB, 500)
         self.R_Motor.start(0)
         self.p = GPIO.PWM(self.BUZZER, 391)
+        
+    def led_on(self):
+        GPIO.output(self.LED_FRONT_1, GPIO.HIGH)
+        GPIO.output(self.LED_FRONT_2, GPIO.HIGH)
+    
+    def led_off(self):
+        GPIO.output(self.LED_FRONT_1, GPIO.LOW)
+        GPIO.output(self.LED_FRONT_2, GPIO.LOW)
+    
     def move(self,x : Movement):
         if x==Movement.nothing:
             return
@@ -84,6 +100,10 @@ class BaseSetting(Singleton):
             self.p.stop()
             time.sleep(0.1)
 
+
+
+
+
 def handle_movement(x : int):
     x = Movement(x)
     if x == Movement.stop:
@@ -98,6 +118,11 @@ def handle_movement(x : int):
         if BaseSetting().SPEED - 10 >= 10:
             BaseSetting().SPEED -= 10
             BaseSetting().move(BaseSetting().prevMove)
+    elif x==Movement.ledon:
+        BaseSetting().led_on()
+    elif x==Movement.ledoff:
+        BaseSetting().led_off()
+    
     else:
         BaseSetting().move(x)
         if x != Movement.nothing:
