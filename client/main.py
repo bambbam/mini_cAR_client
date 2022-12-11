@@ -76,7 +76,7 @@ async def inference(server_ip):
         loss="sparse_categorical_crossentropy",
         optimizer=tf.keras.optimizers.legacy.RMSprop(),
     )
-    new_model.load_weights("client/weight/myweight.ckpt")
+    new_model.load_weights("client/weight/myweight")
     pred = Prediction(new_model)
     preded = ""
     while True:
