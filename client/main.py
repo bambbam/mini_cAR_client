@@ -54,7 +54,7 @@ def frame_buffer_add(frame):
     global frame_buffer, lock
     lock.acquire()
     frame_buffer.append(frame)
-    while len(frame_buffer) >= 60:
+    while len(frame_buffer) >= 120:
         frame_buffer.popleft()
     lock.release()
 
@@ -76,15 +76,15 @@ async def inference(server_ip):
         loss="sparse_categorical_crossentropy",
         optimizer=tf.keras.optimizers.legacy.RMSprop(),
     )
-    new_model.load_weights("client/weight/cp-0010.ckpt")
+    new_model.load_weights("client/weight/myweight.ckpt")
     pred = Prediction(new_model)
     preded = ""
     while True:
         lock.acquire()
         length = len(frame_buffer)
         lock.release()
-        if length >= 30:
-            cur_preded = pred.predict(frame_buffer_get(30))
+        if length >= 60:
+            cur_preded = pred.predict(frame_buffer_get(60))
             if cur_preded != preded:
                 preded = cur_preded
                 handle_gesture(preded)

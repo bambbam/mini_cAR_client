@@ -76,7 +76,7 @@ class Prediction:
         assert len(caps) == 30
         
         to_predict = []
-        for cap in caps[0::2]:
+        for cap in caps[0::4]:
             gray = cv2.cvtColor(cap, cv2.COLOR_BGRA2GRAY)
             to_predict.append(cv2.resize(gray, (64,64)))
     
