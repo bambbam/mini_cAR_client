@@ -90,7 +90,7 @@ async def inference(server_ip):
                 handle_gesture(preded)
         if setting.mode.value == "prod":
             handle_movement(9)
-        time.sleep(1.0)
+        time.sleep(2.0)
         if setting.mode.value == "prod":
             handle_movement(10)
 
