@@ -73,7 +73,7 @@ class Prediction:
         self.cur_class = ''
     
     def predict(self, caps):
-        assert len(caps) == 30
+        assert len(caps) == 60
         
         to_predict = []
         for cap in caps[0::4]:
